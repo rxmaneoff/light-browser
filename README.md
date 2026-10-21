@@ -46,6 +46,8 @@ Features such as tab management, download management, session recovery and advan
 
 ## How to run (0.1-alpha)
 
+Install base-devel, rust, gtk4, webkitgtk-6.0, pkgconf, then run the following commands:
+
 ```
 git clone https://github.com/rxmaneoff/light-browser ~/Light
 cd Light
