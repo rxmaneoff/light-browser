@@ -1,38 +1,31 @@
 use relm4::gtk::{self, prelude::*};
 use webkit6::prelude::*;
 
-const PROBE_HTML: &str = r#"<!doctype html>
-<html lang="ru">
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
-<title>Light — проверка WebKitGTK</title>
-<style>body { font: 20px sans-serif; margin: 3em; }</style>
-<h1>Light Project</h1>
-<p>Эта страница встроена в приложение и не требует сети.</p>
-<p>Выделите текст и измените размер окна, чтобы проверить отображение.</p>
-</html>"#;
+use crate::i18n::{AddressError, Language};
 
-fn normalize_address(input: &str) -> Result<String, &'static str> {
+pub fn normalize_address(input: &str) -> Result<String, AddressError> {
     let input = input.trim();
     if input.is_empty() || input.chars().any(char::is_whitespace) {
-        return Err("Введите корректный адрес без пробелов.");
+        return Err(AddressError::EmptyOrWhitespace);
     }
 
     if input.starts_with("http://") || input.starts_with("https://") {
         Ok(input.to_owned())
     } else if input.contains("://") {
-        Err("Поддерживаются только адреса HTTP и HTTPS.")
+        Err(AddressError::UnsupportedScheme)
     } else {
         Ok(format!("https://{input}"))
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum EngineEvent {
     Started,
     Finished,
     Failed,
     ProcessTerminated,
+    TitleChanged(String),
+    UriChanged(String),
 }
 
 pub struct Engine {
@@ -55,9 +48,25 @@ impl Engine {
             on_failure(EngineEvent::Failed);
             true
         });
+        let on_proc = on_event.clone();
         view.connect_web_process_terminated(move |_, _| {
-            on_event(EngineEvent::ProcessTerminated);
+            on_proc(EngineEvent::ProcessTerminated);
         });
+
+        let on_title = on_event.clone();
+        view.connect_title_notify(move |v| {
+            if let Some(title) = v.title() {
+                on_title(EngineEvent::TitleChanged(title.to_string()));
+            }
+        });
+
+        let on_uri = on_event;
+        view.connect_uri_notify(move |v| {
+            if let Some(uri) = v.uri() {
+                on_uri(EngineEvent::UriChanged(uri.to_string()));
+            }
+        });
+
         Self { view }
     }
 
@@ -65,11 +74,21 @@ impl Engine {
         self.view.clone().upcast()
     }
 
-    pub fn load_probe(&self) {
-        self.view.load_html(PROBE_HTML, Some("about:blank"));
+    #[allow(dead_code)]
+    pub fn title(&self) -> Option<String> {
+        self.view.title().map(|s| s.to_string())
     }
 
-    pub fn navigate(&self, input: &str) -> Result<(), &'static str> {
+    #[allow(dead_code)]
+    pub fn uri(&self) -> Option<String> {
+        self.view.uri().map(|s| s.to_string())
+    }
+
+    pub fn load_probe(&self, lang: Language) {
+        self.view.load_html(lang.probe_html(), Some("about:blank"));
+    }
+
+    pub fn navigate(&self, input: &str) -> Result<(), AddressError> {
         let address = normalize_address(input)?;
         self.view.load_uri(&address);
         Ok(())
@@ -102,7 +121,8 @@ impl Engine {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_address;
+    use super::*;
+    use crate::i18n::AddressError;
 
     #[test]
     fn keeps_http_and_https_addresses() {
@@ -126,8 +146,17 @@ mod tests {
 
     #[test]
     fn rejects_non_web_schemes_and_whitespace() {
-        assert!(normalize_address("file:///etc/passwd").is_err());
-        assert!(normalize_address("custom://example.com").is_err());
-        assert!(normalize_address("https://example.com bad").is_err());
+        assert_eq!(
+            normalize_address("file:///etc/passwd"),
+            Err(AddressError::UnsupportedScheme)
+        );
+        assert_eq!(
+            normalize_address("custom://example.com"),
+            Err(AddressError::UnsupportedScheme)
+        );
+        assert_eq!(
+            normalize_address("https://example.com bad"),
+            Err(AddressError::EmptyOrWhitespace)
+        );
     }
 }

@@ -1,4 +1,6 @@
 mod engine;
+mod i18n;
+mod tabs;
 mod ui;
 
 fn main() -> std::process::ExitCode {
