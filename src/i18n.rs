@@ -1,24 +1,105 @@
-pub const PROBE_HTML_RU: &str = r#"<!doctype html>
-<html lang="ru">
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
-<title>Light — проверка WebKitGTK</title>
-<style>body { font: 20px sans-serif; margin: 3em; }</style>
-<h1>Light Project</h1>
-<p>Эта страница встроена в приложение и не требует сети.</p>
-<p>Выделите текст и измените размер окна, чтобы проверить отображение.</p>
-</html>"#;
+use crate::config::ThemeMode;
 
-pub const PROBE_HTML_EN: &str = r#"<!doctype html>
-<html lang="en">
+pub fn generate_probe_html(lang: Language, theme: ThemeMode, accent_color: &str) -> String {
+    let (bg_color, text_color, card_bg, border_color, secondary_text) = match theme {
+        ThemeMode::Light => ("#f6f8fa", "#1f2328", "#ffffff", "#d0d7de", "#656d76"),
+        ThemeMode::Dark => ("#1c1c1f", "#f0f2f5", "#28282d", "#3c3c43", "#98989f"),
+    };
+
+    let (title, heading, desc_1, desc_2, badge) = match lang {
+        Language::Ru => (
+            "Light — проверка WebKitGTK",
+            "Light Browser",
+            "Эта страница встроена в приложение и не требует сети.",
+            "Выделите текст и измените размер окна, чтобы проверить отображение.",
+            "Встроенная страница",
+        ),
+        Language::En => (
+            "Light — WebKitGTK Probe",
+            "Light Browser",
+            "This page is built into the application and requires no network.",
+            "Select text and resize the window to verify rendering.",
+            "Offline page",
+        ),
+    };
+
+    format!(
+        r#"<!doctype html>
+<html lang="{lang_code}">
+<head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
-<title>Light — WebKitGTK probe</title>
-<style>body { font: 20px sans-serif; margin: 3em; }</style>
-<h1>Light Project</h1>
-<p>This page is built into the application and requires no network.</p>
-<p>Select text and resize the window to verify rendering.</p>
-</html>"#;
+<title>{title}</title>
+<style>
+  :root {{
+    --bg-color: {bg_color};
+    --text-color: {text_color};
+    --card-bg: {card_bg};
+    --border-color: {border_color};
+    --secondary-text: {secondary_text};
+    --accent-color: {accent_color};
+  }}
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 3rem 1.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+    box-sizing: border-box;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }}
+  .card {{
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 2.5rem;
+    max-width: 580px;
+    width: 100%;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  }}
+  .badge {{
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background-color: var(--accent-color);
+    color: #ffffff;
+    margin-bottom: 1rem;
+  }}
+  h1 {{
+    margin: 0 0 1rem 0;
+    font-size: 28px;
+    letter-spacing: -0.5px;
+  }}
+  p {{
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0 0 0.75rem 0;
+    color: var(--secondary-text);
+  }}
+  .highlight {{
+    color: var(--text-color);
+    font-weight: 500;
+  }}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">{badge}</div>
+    <h1>{heading}</h1>
+    <p class="highlight">{desc_1}</p>
+    <p>{desc_2}</p>
+  </div>
+</body>
+</html>"#,
+        lang_code = lang.code(),
+    )
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {
@@ -27,6 +108,22 @@ pub enum Language {
 }
 
 impl Language {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Ru => "ru",
+            Self::En => "en",
+        }
+    }
+
+    pub fn from_code(s: &str) -> Option<Self> {
+        match s.trim().to_lowercase().as_str() {
+            "ru" => Some(Self::Ru),
+            "en" => Some(Self::En),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn toggle(self) -> Self {
         match self {
             Self::Ru => Self::En,
@@ -34,17 +131,95 @@ impl Language {
         }
     }
 
-    pub fn button_label(self) -> &'static str {
+    #[allow(dead_code)]
+    pub fn settings_label(self) -> &'static str {
         match self {
-            Self::Ru => "⚙ RU",
-            Self::En => "⚙ EN",
+            Self::Ru => "Настройки",
+            Self::En => "Settings",
         }
     }
 
     pub fn settings_tooltip(self) -> &'static str {
         match self {
-            Self::Ru => "Настройки: переключить интерфейс на английский язык",
-            Self::En => "Settings: switch interface to Russian language",
+            Self::Ru => "Настройки браузера",
+            Self::En => "Browser settings",
+        }
+    }
+
+    pub fn language_section(self) -> &'static str {
+        match self {
+            Self::Ru => "Язык интерфейса",
+            Self::En => "Interface language",
+        }
+    }
+
+    pub fn theme_section(self) -> &'static str {
+        match self {
+            Self::Ru => "Тема оформления",
+            Self::En => "Appearance theme",
+        }
+    }
+
+    pub fn theme_light(self) -> &'static str {
+        match self {
+            Self::Ru => "Светлая",
+            Self::En => "Light",
+        }
+    }
+
+    pub fn theme_dark(self) -> &'static str {
+        match self {
+            Self::Ru => "Тёмная",
+            Self::En => "Dark",
+        }
+    }
+
+    pub fn accent_section(self) -> &'static str {
+        match self {
+            Self::Ru => "Акцентный цвет",
+            Self::En => "Accent color",
+        }
+    }
+
+    pub fn preset_blue_tooltip(self) -> &'static str {
+        match self {
+            Self::Ru => "Синий (#2563eb)",
+            Self::En => "Blue (#2563eb)",
+        }
+    }
+
+    pub fn preset_purple_tooltip(self) -> &'static str {
+        match self {
+            Self::Ru => "Фиолетовый (#7c3aed)",
+            Self::En => "Purple (#7c3aed)",
+        }
+    }
+
+    pub fn preset_emerald_tooltip(self) -> &'static str {
+        match self {
+            Self::Ru => "Изумрудный (#059669)",
+            Self::En => "Emerald (#059669)",
+        }
+    }
+
+    pub fn preset_amber_tooltip(self) -> &'static str {
+        match self {
+            Self::Ru => "Янтарный (#d97706)",
+            Self::En => "Amber (#d97706)",
+        }
+    }
+
+    pub fn preset_rose_tooltip(self) -> &'static str {
+        match self {
+            Self::Ru => "Розовый (#e11d48)",
+            Self::En => "Rose (#e11d48)",
+        }
+    }
+
+    pub fn custom_color_tooltip(self) -> &'static str {
+        match self {
+            Self::Ru => "Выбрать свой цвет",
+            Self::En => "Custom color",
         }
     }
 
@@ -139,10 +314,38 @@ impl Language {
         }
     }
 
-    pub fn probe_html(self) -> &'static str {
+    pub fn conn_internal(self) -> &'static str {
         match self {
-            Self::Ru => PROBE_HTML_RU,
-            Self::En => PROBE_HTML_EN,
+            Self::Ru => "Внутренняя страница",
+            Self::En => "Internal page",
+        }
+    }
+
+    pub fn conn_https(self) -> &'static str {
+        match self {
+            Self::Ru => "Защищённое соединение (HTTPS)",
+            Self::En => "Secure connection (HTTPS)",
+        }
+    }
+
+    pub fn conn_http(self) -> &'static str {
+        match self {
+            Self::Ru => "Незащищённое соединение (HTTP)",
+            Self::En => "Insecure connection (HTTP)",
+        }
+    }
+
+    pub fn conn_tls_error(self) -> &'static str {
+        match self {
+            Self::Ru => "Ошибка сертификата TLS",
+            Self::En => "TLS certificate error",
+        }
+    }
+
+    pub fn conn_unknown(self) -> &'static str {
+        match self {
+            Self::Ru => "Соединение",
+            Self::En => "Connection",
         }
     }
 }
@@ -186,5 +389,17 @@ mod tests {
             AddressError::UnsupportedScheme.message(Language::En),
             "Only HTTP and HTTPS addresses are supported."
         );
+    }
+
+    #[test]
+    fn test_generate_probe_html() {
+        let html_ru = generate_probe_html(Language::Ru, ThemeMode::Dark, "#3584e4");
+        assert!(html_ru.contains("Light Browser"));
+        assert!(html_ru.contains("Встроенная страница"));
+        assert!(html_ru.contains("#1c1c1f"));
+
+        let html_en = generate_probe_html(Language::En, ThemeMode::Light, "#e01b24");
+        assert!(html_en.contains("Offline page"));
+        assert!(html_en.contains("#f6f8fa"));
     }
 }

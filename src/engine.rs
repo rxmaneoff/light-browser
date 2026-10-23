@@ -1,7 +1,11 @@
-use relm4::gtk::{self, prelude::*};
+use std::fs;
+use std::path::PathBuf;
+
+use relm4::gtk::{self, glib, prelude::*};
 use webkit6::prelude::*;
 
-use crate::i18n::{AddressError, Language};
+use crate::config::ThemeMode;
+use crate::i18n::{AddressError, Language, generate_probe_html};
 
 pub fn normalize_address(input: &str) -> Result<String, AddressError> {
     let input = input.trim();
@@ -18,6 +22,37 @@ pub fn normalize_address(input: &str) -> Result<String, AddressError> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionSecurity {
+    Internal,
+    Http,
+    Https,
+    TlsError,
+    Unknown,
+}
+
+impl ConnectionSecurity {
+    pub fn icon_name(self) -> &'static str {
+        match self {
+            Self::Internal => "emblem-default-symbolic",
+            Self::Https => "channel-secure-symbolic",
+            Self::Http => "channel-insecure-symbolic",
+            Self::TlsError => "dialog-warning-symbolic",
+            Self::Unknown => "network-wireless-acquiring-symbolic",
+        }
+    }
+
+    pub fn tooltip(self, lang: Language) -> &'static str {
+        match self {
+            Self::Internal => lang.conn_internal(),
+            Self::Https => lang.conn_https(),
+            Self::Http => lang.conn_http(),
+            Self::TlsError => lang.conn_tls_error(),
+            Self::Unknown => lang.conn_unknown(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum EngineEvent {
     Started,
@@ -26,6 +61,7 @@ pub enum EngineEvent {
     ProcessTerminated,
     TitleChanged(String),
     UriChanged(String),
+    TlsError,
 }
 
 pub struct Engine {
@@ -33,21 +69,57 @@ pub struct Engine {
 }
 
 impl Engine {
+    pub fn user_data_dir() -> PathBuf {
+        glib::user_data_dir().join("light-project")
+    }
+
+    #[allow(dead_code)]
+    pub fn user_cache_dir() -> PathBuf {
+        glib::user_cache_dir().join("light-project")
+    }
+
+    pub fn init_persistent_storage() {
+        let data_dir = Self::user_data_dir();
+
+        if let Err(e) = fs::create_dir_all(&data_dir) {
+            eprintln!("Не удалось создать каталог пользовательских данных: {}", e);
+            return;
+        }
+
+        let cookie_file = data_dir.join("cookies.sqlite");
+        let cookie_path_str = cookie_file.to_string_lossy();
+
+        if let Some(cookie_manager) =
+            webkit6::NetworkSession::default().and_then(|s| s.cookie_manager())
+        {
+            cookie_manager
+                .set_persistent_storage(&cookie_path_str, webkit6::CookiePersistentStorage::Sqlite);
+        }
+    }
+
     // WebView создаётся и используется только в главном потоке GTK.
     pub fn new(on_event: impl Fn(EngineEvent) + Clone + 'static) -> Self {
         let view = webkit6::WebView::new();
+
         let on_load = on_event.clone();
         view.connect_load_changed(move |_, event| match event {
             webkit6::LoadEvent::Started => on_load(EngineEvent::Started),
             webkit6::LoadEvent::Finished => on_load(EngineEvent::Finished),
             _ => {}
         });
+
         let on_failure = on_event.clone();
         view.connect_load_failed(move |_, _, _, _| {
-            // Сообщение UI не содержит URL или текста ошибки с данными страницы.
             on_failure(EngineEvent::Failed);
             true
         });
+
+        let on_tls_failure = on_event.clone();
+        view.connect_load_failed_with_tls_errors(move |_, _, _, _| {
+            on_tls_failure(EngineEvent::TlsError);
+            false
+        });
+
         let on_proc = on_event.clone();
         view.connect_web_process_terminated(move |_, _| {
             on_proc(EngineEvent::ProcessTerminated);
@@ -84,8 +156,9 @@ impl Engine {
         self.view.uri().map(|s| s.to_string())
     }
 
-    pub fn load_probe(&self, lang: Language) {
-        self.view.load_html(lang.probe_html(), Some("about:blank"));
+    pub fn load_probe(&self, lang: Language, theme: ThemeMode, accent_color: &str) {
+        let html = generate_probe_html(lang, theme, accent_color);
+        self.view.load_html(&html, Some("about:blank"));
     }
 
     pub fn navigate(&self, input: &str) -> Result<(), AddressError> {
@@ -122,7 +195,6 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::i18n::AddressError;
 
     #[test]
     fn keeps_http_and_https_addresses() {
@@ -157,6 +229,26 @@ mod tests {
         assert_eq!(
             normalize_address("https://example.com bad"),
             Err(AddressError::EmptyOrWhitespace)
+        );
+    }
+
+    #[test]
+    fn test_connection_security_icons() {
+        assert_eq!(
+            ConnectionSecurity::Https.icon_name(),
+            "channel-secure-symbolic"
+        );
+        assert_eq!(
+            ConnectionSecurity::Http.icon_name(),
+            "channel-insecure-symbolic"
+        );
+        assert_eq!(
+            ConnectionSecurity::TlsError.icon_name(),
+            "dialog-warning-symbolic"
+        );
+        assert_eq!(
+            ConnectionSecurity::Internal.icon_name(),
+            "emblem-default-symbolic"
         );
     }
 }

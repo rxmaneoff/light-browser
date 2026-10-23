@@ -1,4 +1,4 @@
-use crate::engine::Engine;
+use crate::engine::{ConnectionSecurity, Engine};
 use crate::i18n::{AddressError, Language};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -36,6 +36,7 @@ pub struct Tab {
     status: TabStatus,
     failed: bool,
     is_probe: bool,
+    tls_error: bool,
     engine: Engine,
 }
 
@@ -53,6 +54,7 @@ impl Tab {
             status: TabStatus::Waiting,
             failed: false,
             is_probe,
+            tls_error: false,
             engine,
         }
     }
@@ -106,6 +108,31 @@ impl Tab {
 
     pub fn set_is_probe(&mut self, is_probe: bool) {
         self.is_probe = is_probe;
+    }
+
+    pub fn set_tls_error(&mut self, error: bool) {
+        self.tls_error = error;
+    }
+
+    pub fn connection_security(&self) -> ConnectionSecurity {
+        if self.is_probe {
+            return ConnectionSecurity::Internal;
+        }
+
+        if self.tls_error {
+            return ConnectionSecurity::TlsError;
+        }
+
+        let addr = self.address.to_lowercase();
+        if addr.starts_with("https://") {
+            ConnectionSecurity::Https
+        } else if addr.starts_with("http://") {
+            ConnectionSecurity::Http
+        } else if addr.is_empty() || addr == "about:blank" {
+            ConnectionSecurity::Internal
+        } else {
+            ConnectionSecurity::Unknown
+        }
     }
 
     pub fn engine(&self) -> &Engine {
@@ -238,11 +265,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_tab_manager_navigation_logic() {
+    fn test_all_tabs_scenarios_in_gtk_context() {
         if relm4::gtk::init().is_err() {
             return;
         }
 
+        // 1. Navigation logic
         let mut manager = TabManager::new();
         assert_eq!(manager.count(), 0);
         assert!(manager.active_tab().is_none());
@@ -281,40 +309,28 @@ mod tests {
         assert_eq!(manager.active_id(), Some(res_id));
         assert_eq!(manager.active_tab().unwrap().title(), "Вкладка 3");
         assert!(manager.active_tab().unwrap().is_probe());
-    }
 
-    #[test]
-    fn test_tab_manager_active_switch_on_close() {
-        if relm4::gtk::init().is_err() {
-            return;
-        }
+        // 2. Active switch on close
+        let mut manager2 = TabManager::new();
+        let id1 = manager2.add_tab(Engine::new(|_| {}), "T1", false);
+        let id2 = manager2.add_tab(Engine::new(|_| {}), "T2", false);
+        let id3 = manager2.add_tab(Engine::new(|_| {}), "T3", false);
 
-        let mut manager = TabManager::new();
-        let id1 = manager.add_tab(Engine::new(|_| {}), "T1", false);
-        let id2 = manager.add_tab(Engine::new(|_| {}), "T2", false);
-        let id3 = manager.add_tab(Engine::new(|_| {}), "T3", false);
+        assert!(manager2.switch_to(id2));
+        assert_eq!(manager2.active_id(), Some(id2));
 
-        assert!(manager.switch_to(id2));
-        assert_eq!(manager.active_id(), Some(id2));
+        assert!(manager2.close_tab(id2).is_some());
+        assert_eq!(manager2.active_id(), Some(id3));
+        assert_eq!(manager2.count(), 2);
 
-        assert!(manager.close_tab(id2).is_some());
-        assert_eq!(manager.active_id(), Some(id3));
-        assert_eq!(manager.count(), 2);
+        assert!(manager2.close_tab(id3).is_some());
+        assert_eq!(manager2.active_id(), Some(id1));
+        assert_eq!(manager2.count(), 1);
 
-        assert!(manager.close_tab(id3).is_some());
-        assert_eq!(manager.active_id(), Some(id1));
-        assert_eq!(manager.count(), 1);
-    }
-
-    #[test]
-    fn test_tab_metadata_mutation() {
-        if relm4::gtk::init().is_err() {
-            return;
-        }
-
-        let mut manager = TabManager::new();
-        let id = manager.add_tab(Engine::new(|_| {}), "Начальный", true);
-        let tab = manager.get_mut(id).unwrap();
+        // 3. Metadata mutation
+        let mut manager3 = TabManager::new();
+        let id = manager3.add_tab(Engine::new(|_| {}), "Начальный", true);
+        let tab = manager3.get_mut(id).unwrap();
 
         assert_eq!(tab.title(), "Начальный");
         tab.set_title("Новый заголовок".to_owned());
@@ -334,5 +350,22 @@ mod tests {
         assert!(tab.is_probe());
         tab.set_is_probe(false);
         assert!(!tab.is_probe());
+
+        // 4. Connection security states
+        let mut manager4 = TabManager::new();
+        let id = manager4.add_tab(Engine::new(|_| {}), "Probe", true);
+        let tab = manager4.get_mut(id).unwrap();
+
+        assert_eq!(tab.connection_security(), ConnectionSecurity::Internal);
+
+        tab.set_is_probe(false);
+        tab.set_address("http://example.com".to_owned());
+        assert_eq!(tab.connection_security(), ConnectionSecurity::Http);
+
+        tab.set_address("https://example.com".to_owned());
+        assert_eq!(tab.connection_security(), ConnectionSecurity::Https);
+
+        tab.set_tls_error(true);
+        assert_eq!(tab.connection_security(), ConnectionSecurity::TlsError);
     }
 }
