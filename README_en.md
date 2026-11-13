@@ -8,11 +8,11 @@
 
 | Dark theme | Light theme |
 |:---:|:---:|
-| ![Dark theme](docs/screenshots/dark_en.png) | ![Light theme](docs/screenshots/light_en.png) |
+| ![Home page in dark theme](docs/screenshots/home-dark-en.png) | ![Home page in light theme](docs/screenshots/home-light-en.png) |
 
-| Web page |
-|:---:|
-| ![Web page](docs/screenshots/archlinux.png) |
+| Settings | Web page |
+|:---:|:---:|
+| ![Settings](docs/screenshots/settings-en.png) | ![Web page](docs/screenshots/archlinux-en.png) |
 
 ## Features
 

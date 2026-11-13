@@ -8,11 +8,11 @@
 
 | Тёмная тема | Светлая тема |
 |:---:|:---:|
-| ![Тёмная тема](docs/screenshots/dark_ru.png) | ![Светлая тема](docs/screenshots/light_ru.png) |
+| ![Домашняя страница в тёмной теме](docs/screenshots/home-dark-ru.png) | ![Домашняя страница в светлой теме](docs/screenshots/home-light-ru.png) |
 
-| Просмотр веб-страницы |
-|:---:|
-| ![Просмотр веб-страницы](docs/screenshots/archlinux.png) |
+| Настройки | Просмотр веб-страницы |
+|:---:|:---:|
+| ![Настройки](docs/screenshots/settings-ru.png) | ![Просмотр веб-страницы](docs/screenshots/archlinux-ru.png) |
 
 ## Возможности
 

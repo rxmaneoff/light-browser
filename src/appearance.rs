@@ -131,6 +131,15 @@ pub fn generate_gtk_css(config: &AppearanceConfig) -> String {
             color: {fg};
         }}
 
+        .main-window label,
+        .main-window button {{
+            color: {fg};
+        }}
+
+        .main-window label.dim-label {{
+            opacity: 0.68;
+        }}
+
         .header-panel, .navigation-panel {{
             background-color: transparent;
         }}
