@@ -1,8 +1,4 @@
-mod config;
-mod engine;
-mod i18n;
-mod tabs;
-mod ui;
+use light_project::ui;
 
 fn main() -> std::process::ExitCode {
     if relm4::gtk::init().is_err() {

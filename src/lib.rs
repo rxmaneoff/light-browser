@@ -1,0 +1,12 @@
+pub mod appearance;
+pub mod config;
+pub mod engine;
+pub mod i18n;
+pub mod modules;
+pub mod performance;
+pub mod searchengine;
+pub mod security;
+pub mod shortcuts;
+pub mod tab_manager;
+pub mod tabs;
+pub mod ui;
